@@ -5,41 +5,54 @@
 *.swp
 .DS_Store
 .atom/
-.build/
 .buildlog/
 .history
 .svn/
-.swiftpm/
-migrate_working_dir/
 
-# IntelliJ related
+# IntelliJ
+.idea/
 *.iml
 *.ipr
 *.iws
-.idea/
+out/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
-
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
-.dart_tool/
+# The Flutter SDK
+.flutter-plugins
 .flutter-plugins-dependencies
+.packages
 .pub-cache/
 .pub/
 /build/
-/coverage/
 
-# Symbolication related
-app.*.symbols
+# Android Studio
+.gradle/
+app/src/main/gen/
+captures/
+local.properties
 
-# Obfuscation related
-app.*.map.json
+# Xcode
+.xcworkspace/
+build/
+*.hmap
+*.xccheckout
+/ios/Flutter/App.framework
+/ios/Flutter/Flutter.framework
+/ios/Flutter/Generated.xcconfig
+/ios/Flutter/flutter_export_environment.sh
+/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-1024.png
+/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-167.png
+/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-20.png
+/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-29.png
+/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-40.png
+/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-58.png
+/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-60.png
+/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-76.png
+/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-80.png
+/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-87.png
+/ios/Runner/GeneratedPluginRegistrant.*
 
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
+# Visual Studio Code
+.vscode/
+
+# Don't ignore the release APK
+!/build/app/outputs/flutter-apk/app-release.apk
