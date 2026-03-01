@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 Future<void> main() async {
@@ -15,6 +16,16 @@ Future<void> main() async {
 }
 
 enum ScreenType { splash, auth, mainMenu, levelMap, game, shop, profile }
+
+enum LevelRank { easy, hard }
+
+LevelRank getLevelRank(int levelId) => levelId <= 15 ? LevelRank.easy : LevelRank.hard;
+
+int getDragonTier(int levelId) {
+  if (levelId <= 10) return 1;
+  if (levelId <= 20) return 2;
+  return 3;
+}
 
 class UserData {
   final String uid;
@@ -274,7 +285,6 @@ class FirestoreUserService {
     return data;
   }
 
-
   Future<void> saveUserData(String uid, Map<String, dynamic> updates) {
     return _db.collection('users').doc(uid).set(updates, SetOptions(merge: true));
   }
@@ -293,8 +303,6 @@ class EggQuestApp extends StatelessWidget {
     );
   }
 }
-
-//To DO:EggQuestHome
 
 class EggQuestHome extends StatefulWidget {
   const EggQuestHome({super.key});
@@ -326,6 +334,7 @@ class _EggQuestHomeState extends State<EggQuestHome> {
   Color tempColor = avatarColors.first;
   bool isSavingProfile = false;
   bool isLoginMode = true;
+  String debugStatus = 'Booting...';
 
   @override
   void initState() {
@@ -333,14 +342,24 @@ class _EggQuestHomeState extends State<EggQuestHome> {
     unawaited(_boot());
   }
 
+  void _setDebugStatus(String message) {
+    if (!kDebugMode) return;
+    debugPrint('[EggQuestDebug] $message');
+    if (!mounted) return;
+    setState(() => debugStatus = message);
+  }
+
   Future<void> _boot() async {
+    _setDebugStatus('Initializing Firebase...');
     try {
       if (Firebase.apps.isEmpty) {
         await Firebase.initializeApp(options: FirebaseAppConfig.options);
       }
+      _setDebugStatus('Firebase initialized. Listening auth state...');
       _authSub = authService.onStateChanged().listen((fbUser) async {
         if (!mounted) return;
         if (fbUser == null) {
+          _setDebugStatus('No user session. Showing auth screen.');
           setState(() {
             user = null;
             screen = ScreenType.auth;
@@ -349,6 +368,7 @@ class _EggQuestHomeState extends State<EggQuestHome> {
           return;
         }
         try {
+          _setDebugStatus('User detected. Syncing Firestore profile...');
           var userData = await firestoreService.getUserData(fbUser.uid);
           userData ??= await firestoreService.initUserData(fbUser.uid, fbUser.email ?? '');
           if (!mounted) return;
@@ -357,9 +377,12 @@ class _EggQuestHomeState extends State<EggQuestHome> {
             screen = ScreenType.levelMap;
             isAuthChecking = false;
           });
-          unawaited(_fetchAiTip());
+          _setDebugStatus('Profile synced. Navigated to level map.');
+          _setDebugStatus('Level complete. Back to map.');
+      unawaited(_fetchAiTip());
         } catch (e) {
           if (!mounted) return;
+          _setDebugStatus('Firestore sync failed: $e');
           setState(() {
             initializationError = 'Sync Failed: $e';
             isAuthChecking = false;
@@ -368,6 +391,7 @@ class _EggQuestHomeState extends State<EggQuestHome> {
         }
       });
     } catch (e) {
+      _setDebugStatus('Boot failed: $e');
       setState(() {
         initializationError = 'Sync Failed: $e';
         isAuthChecking = false;
@@ -393,6 +417,7 @@ class _EggQuestHomeState extends State<EggQuestHome> {
   }
 
   Future<void> _syncSignedInUser() async {
+    _setDebugStatus('Auth success. Loading user profile...');
     final fbUser = FirebaseAuth.instance.currentUser;
     if (fbUser == null) return;
 
@@ -406,11 +431,13 @@ class _EggQuestHomeState extends State<EggQuestHome> {
       isAuthChecking = false;
       isLoading = false;
     });
+    _setDebugStatus('Login complete. Welcome to level map!');
     unawaited(_fetchAiTip());
   }
 
   Future<void> _handleLogin() async {
     if (isLoading) return;
+    _setDebugStatus('Attempting login...');
     setState(() {
       isLoading = true;
       authError = null;
@@ -420,6 +447,7 @@ class _EggQuestHomeState extends State<EggQuestHome> {
       await FirebaseAuth.instance.signInWithEmailAndPassword(email: cleanEmail, password: password);
       await _syncSignedInUser();
     } on FirebaseAuthException catch (e) {
+      _setDebugStatus('Signup failed: ${e.code}');
       setState(() {
         authError = e.message ?? e.code;
         isLoading = false;
@@ -434,6 +462,7 @@ class _EggQuestHomeState extends State<EggQuestHome> {
 
   Future<void> _handleSignup() async {
     if (isLoading) return;
+    _setDebugStatus('Creating account...');
     setState(() {
       isLoading = true;
       authError = null;
@@ -443,6 +472,7 @@ class _EggQuestHomeState extends State<EggQuestHome> {
       await FirebaseAuth.instance.createUserWithEmailAndPassword(email: cleanEmail, password: password);
       await _syncSignedInUser();
     } on FirebaseAuthException catch (e) {
+      _setDebugStatus('Signup failed: ${e.code}');
       setState(() {
         authError = e.message ?? e.code;
         isLoading = false;
@@ -511,11 +541,13 @@ class _EggQuestHomeState extends State<EggQuestHome> {
     await Future<void>.delayed(const Duration(milliseconds: 1500));
     if (mounted) {
       setState(() => screen = ScreenType.levelMap);
+      _setDebugStatus('Level complete. Back to map.');
       unawaited(_fetchAiTip());
     }
   }
 
   Future<void> _logout() async {
+    _setDebugStatus('Logging out...');
     await authService.logout();
     if (!mounted) return;
     setState(() {
@@ -551,11 +583,13 @@ class _EggQuestHomeState extends State<EggQuestHome> {
                     ],
                   )
                 else
-                  const Column(
+                  Column(
                     children: [
                       CircularProgressIndicator(color: Colors.white),
                       SizedBox(height: 10),
                       Text('Connecting to Cloud', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                      SizedBox(height: 8),
+                      Text(debugStatus, style: TextStyle(color: Colors.white70, fontSize: 11), textAlign: TextAlign.center),
                     ],
                   ),
               ],
@@ -608,7 +642,8 @@ class _EggQuestHomeState extends State<EggQuestHome> {
                         child: Text(isLoading ? 'LOADING...' : (isLoginMode ? 'LOGIN' : 'SIGN UP')),
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
+                    Text(debugStatus, style: const TextStyle(fontSize: 11, color: Colors.black54), textAlign: TextAlign.center),
                     TextButton(
                       onPressed: isLoading
                           ? null
@@ -638,6 +673,8 @@ class _EggQuestHomeState extends State<EggQuestHome> {
               const CircularProgressIndicator(),
               const SizedBox(height: 12),
               const Text('Preparing account...'),
+              const SizedBox(height: 6),
+              Text(debugStatus, style: const TextStyle(fontSize: 11, color: Colors.black54)),
               const SizedBox(height: 12),
               TextButton(
                 onPressed: () => setState(() => screen = ScreenType.auth),
@@ -823,6 +860,7 @@ class _EggQuestHomeState extends State<EggQuestHome> {
                   final level = levels[index];
                   final isUnlocked = level.id <= currentUser.unlockedLevels;
                   final isCurrent = level.id == currentUser.unlockedLevels;
+                  final isHard = getLevelRank(level.id) == LevelRank.hard;
                   final offset = sin(index * 0.8) * 60;
 
                   return Align(
@@ -832,24 +870,43 @@ class _EggQuestHomeState extends State<EggQuestHome> {
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 10),
                         child: SizedBox(
-                          width: 80,
-                          height: 80,
-                          child: ElevatedButton(
-                            onPressed: !isUnlocked
-                                ? null
-                                : () {
-                                    _updateUserData({'currentLevel': level.id});
-                                    setState(() => screen = ScreenType.game);
-                                  },
-                            style: ElevatedButton.styleFrom(
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                              backgroundColor: isCurrent
-                                  ? const Color(0xFF0EA5E9)
-                                  : isUnlocked
-                                      ? const Color(0xFF10B981)
-                                      : Colors.grey,
-                            ),
-                            child: Text(isUnlocked ? '${level.id}' : '🔒', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+                          width: 88,
+                          height: 88,
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Positioned.fill(
+                                child: ElevatedButton(
+                                  onPressed: !isUnlocked
+                                      ? null
+                                      : () {
+                                          _updateUserData({'currentLevel': level.id});
+                                          setState(() => screen = ScreenType.game);
+                                        },
+                                  style: ElevatedButton.styleFrom(
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                    backgroundColor: isCurrent
+                                        ? const Color(0xFF0EA5E9)
+                                        : isUnlocked
+                                            ? (isHard ? const Color(0xFFB45309) : const Color(0xFF10B981))
+                                            : Colors.grey,
+                                  ),
+                                  child: Text(isUnlocked ? '${level.id}' : '🔒', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+                                ),
+                              ),
+                              if (isHard && isUnlocked)
+                                const Positioned.fill(child: IgnorePointer(child: _HardLevelFireAura())),
+                              if (isHard)
+                                Positioned(
+                                  top: -8,
+                                  right: -8,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(color: const Color(0xFFFFEDD5), borderRadius: BorderRadius.circular(999)),
+                                    child: const Text('HARD', style: TextStyle(fontSize: 10, color: Color(0xFF9A3412), fontWeight: FontWeight.w900)),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                       ),
@@ -873,6 +930,54 @@ class _EggQuestHomeState extends State<EggQuestHome> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _HardLevelFireAura extends StatefulWidget {
+  const _HardLevelFireAura();
+
+  @override
+  State<_HardLevelFireAura> createState() => _HardLevelFireAuraState();
+}
+
+class _HardLevelFireAuraState extends State<_HardLevelFireAura> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final glow = 0.25 + (_controller.value * 0.45);
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(color: const Color(0xFFFF6A00).withOpacity(glow), blurRadius: 18, spreadRadius: 1),
+            ],
+          ),
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Text('🔥', style: TextStyle(fontSize: 14 + (_controller.value * 4))),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -942,6 +1047,11 @@ class _EggGameViewState extends State<EggGameView> {
   int eggsDisplay = 0;
   bool isShaking = false;
   Timer? _timer;
+  Timer? _countdownTimer;
+  int countdownValue = 3;
+  String? celebrationText;
+  double celebrationOpacity = 0;
+  double effectClock = 0;
 
   @override
   void initState() {
@@ -953,6 +1063,7 @@ class _EggGameViewState extends State<EggGameView> {
   @override
   void dispose() {
     _timer?.cancel();
+    _countdownTimer?.cancel();
     birdY.dispose();
     birdVelocity.dispose();
     super.dispose();
@@ -965,10 +1076,20 @@ class _EggGameViewState extends State<EggGameView> {
     eggsDisplay = 0;
     gameState = 'IDLE';
     isShaking = false;
-    pipes
-      ..clear()
-      ..add(_spawnPipe(canvasWidth + 100));
+    countdownValue = 3;
+    celebrationText = null;
+    celebrationOpacity = 0;
+    effectClock = 0;
+    pipes.clear();
+
+    final startX = canvasWidth + 100;
+    const spacing = 220.0;
+    for (var i = 0; i < widget.level.pipesToPass; i++) {
+      pipes.add(_spawnPipe(startX + (i * spacing)));
+    }
+
     _timer?.cancel();
+    _countdownTimer?.cancel();
     setState(() {});
   }
 
@@ -986,12 +1107,62 @@ class _EggGameViewState extends State<EggGameView> {
     );
   }
 
+  Color _shade(Color c, double factor) {
+    return Color.fromARGB(
+      c.alpha,
+      (c.red * factor).clamp(0, 255).toInt(),
+      (c.green * factor).clamp(0, 255).toInt(),
+      (c.blue * factor).clamp(0, 255).toInt(),
+    );
+  }
+
+  void _startCountdown() {
+    if (gameState == 'COUNTDOWN' || gameState == 'PLAYING') return;
+    _countdownTimer?.cancel();
+    setState(() {
+      gameState = 'COUNTDOWN';
+      countdownValue = 3;
+    });
+
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (countdownValue <= 1) {
+        timer.cancel();
+        setState(() {
+          gameState = 'PLAYING';
+          birdVelocity.value = jumpForce;
+        });
+        _timer = Timer.periodic(const Duration(milliseconds: 16), (_) => _update());
+      } else {
+        setState(() => countdownValue -= 1);
+      }
+    });
+  }
+
+  Future<void> _showCelebration(String text) async {
+    if (!mounted) return;
+    setState(() {
+      celebrationText = text;
+      celebrationOpacity = 1;
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 550));
+    if (!mounted) return;
+    setState(() => celebrationOpacity = 0);
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    if (!mounted) return;
+    setState(() => celebrationText = null);
+  }
+
   void _jump() {
     if (gameState == 'IDLE') {
-      gameState = 'PLAYING';
-      birdVelocity.value = jumpForce;
-      _timer = Timer.periodic(const Duration(milliseconds: 16), (_) => _update());
-      setState(() {});
+      _startCountdown();
+      return;
+    }
+
+    if (gameState == 'COUNTDOWN') {
       return;
     }
 
@@ -1003,6 +1174,7 @@ class _EggGameViewState extends State<EggGameView> {
   void _triggerGameOver() {
     if (gameState == 'GAMEOVER') return;
     _timer?.cancel();
+    _countdownTimer?.cancel();
     widget.onLose();
     setState(() {
       gameState = 'GAMEOVER';
@@ -1015,6 +1187,8 @@ class _EggGameViewState extends State<EggGameView> {
 
   void _update() {
     if (!mounted || gameState != 'PLAYING') return;
+
+    effectClock += 0.08;
 
     for (final star in stars) {
       star.x -= star.speed;
@@ -1061,6 +1235,15 @@ class _EggGameViewState extends State<EggGameView> {
       if (!pipe.passed && pipe.x + pipeWidth < 100) {
         pipe.passed = true;
         score += 1;
+        final remaining = widget.level.pipesToPass - score;
+        if (remaining == 0) {
+          unawaited(_showCelebration('Finish Line!'));
+        } else if (remaining <= 2) {
+          unawaited(_showCelebration('Almost there!'));
+        } else if (score % 3 == 0) {
+          unawaited(_showCelebration('Great rhythm!'));
+        }
+
         if (score >= widget.level.pipesToPass) {
           _timer?.cancel();
           setState(() => gameState = 'WIN');
@@ -1074,11 +1257,6 @@ class _EggGameViewState extends State<EggGameView> {
       pipes.removeAt(0);
     }
 
-    final last = pipes.last;
-    if (last.x < canvasWidth - 180) {
-      pipes.add(_spawnPipe(canvasWidth + 40));
-    }
-
     setState(() {});
   }
 
@@ -1090,7 +1268,19 @@ class _EggGameViewState extends State<EggGameView> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          Container(color: widget.level.bgColor),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 500),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  _shade(widget.level.bgColor, 1.15),
+                  _shade(widget.level.bgColor, 0.85),
+                ],
+              ),
+            ),
+          ),
           Center(
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 70),
@@ -1107,6 +1297,9 @@ class _EggGameViewState extends State<EggGameView> {
                     birdColor: widget.character.color,
                     pipeColor: widget.level.pipeColor,
                     gapSize: widget.level.gapSize,
+                    levelRank: getLevelRank(widget.level.id),
+                    dragonTier: getDragonTier(widget.level.id),
+                    effectClock: effectClock,
                   ),
                 ),
               ),
@@ -1125,11 +1318,36 @@ class _EggGameViewState extends State<EggGameView> {
             ),
           ),
           if (gameState == 'IDLE')
-            const _CenterOverlay(
-              title: 'EGG QUEST',
-              subtitle: 'Tap to Fly',
-              icon: Icons.play_circle_fill,
-              tint: Colors.black54,
+            _CenterOverlay(
+              title: 'Level ${widget.level.id}',
+              subtitle: 'Dragon Rank ${getDragonTier(widget.level.id)} • Pass ${widget.level.pipesToPass} pipes • Hard levels breathe fire!',
+              icon: Icons.rocket_launch,
+              tint: Colors.black45,
+            ),
+          if (gameState == 'COUNTDOWN') _CountdownOverlay(count: countdownValue),
+          if (celebrationText != null)
+            Positioned(
+              top: 92,
+              left: 0,
+              right: 0,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 220),
+                opacity: celebrationOpacity,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black45,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: Text(
+                      celebrationText!,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+              ),
             ),
           if (gameState == 'GAMEOVER')
             _CrashOverlay(onRetry: _initGame, onQuit: widget.onExit, score: score, target: widget.level.pipesToPass),
@@ -1149,6 +1367,9 @@ class _GamePainter extends CustomPainter {
   final Color birdColor;
   final Color pipeColor;
   final double gapSize;
+  final LevelRank levelRank;
+  final int dragonTier;
+  final double effectClock;
 
   _GamePainter({
     required this.stars,
@@ -1158,6 +1379,9 @@ class _GamePainter extends CustomPainter {
     required this.birdColor,
     required this.pipeColor,
     required this.gapSize,
+    required this.levelRank,
+    required this.dragonTier,
+    required this.effectClock,
   });
 
   @override
@@ -1186,16 +1410,56 @@ class _GamePainter extends CustomPainter {
     canvas.save();
     canvas.translate(118, birdY + 18);
     canvas.rotate((birdVelocity * 0.04).clamp(-0.35, 0.45));
-    final birdPaint = Paint()..color = birdColor;
-    canvas.drawCircle(Offset.zero, 18, birdPaint);
-    canvas.drawCircle(const Offset(6, -5), 3.5, Paint()..color = Colors.white);
-    canvas.drawCircle(const Offset(7, -5), 1.5, Paint()..color = Colors.black);
-    final beak = Path()
-      ..moveTo(14, 0)
-      ..lineTo(26, 4)
-      ..lineTo(14, 8)
+
+    final bodyPaint = Paint()..color = birdColor;
+    final wingPaint = Paint()..color = Color.lerp(birdColor, Colors.black, 0.25)!;
+    final accentPaint = Paint()..color = dragonTier >= 3 ? const Color(0xFFDC2626) : const Color(0xFFF97316);
+
+    final bodyRadius = dragonTier == 1 ? 16.0 : dragonTier == 2 ? 18.0 : 20.0;
+    canvas.drawCircle(Offset.zero, bodyRadius, bodyPaint);
+
+    final wingFlap = sin(effectClock * 2.3) * 4;
+    final leftWing = Path()
+      ..moveTo(-2, -2)
+      ..lineTo(-24, -8 - wingFlap)
+      ..lineTo(-10, 8)
       ..close();
-    canvas.drawPath(beak, Paint()..color = const Color(0xFFF97316));
+    final rightWing = Path()
+      ..moveTo(2, -2)
+      ..lineTo(-10, 8)
+      ..lineTo(-24, 16 + wingFlap)
+      ..close();
+    canvas.drawPath(leftWing, wingPaint);
+    canvas.drawPath(rightWing, wingPaint);
+
+    final horn = Path()
+      ..moveTo(4, -12)
+      ..lineTo(9, -24)
+      ..lineTo(14, -12)
+      ..close();
+    canvas.drawPath(horn, accentPaint);
+
+    canvas.drawCircle(const Offset(7, -5), 3.2, Paint()..color = Colors.white);
+    canvas.drawCircle(const Offset(8, -5), 1.5, Paint()..color = Colors.black);
+
+    final mouth = Path()
+      ..moveTo(12, 1)
+      ..lineTo(26, 4)
+      ..lineTo(12, 8)
+      ..close();
+    canvas.drawPath(mouth, accentPaint);
+
+    if (levelRank == LevelRank.hard) {
+      final fireLen = 16 + (sin(effectClock * 4.5).abs() * 12);
+      final fire = Path()
+        ..moveTo(24, 4)
+        ..lineTo(24 + fireLen, -1)
+        ..lineTo(24 + fireLen, 9)
+        ..close();
+      canvas.drawPath(fire, Paint()..color = const Color(0xFFFF6A00).withOpacity(0.8));
+      canvas.drawCircle(Offset(24 + fireLen + 4, 4), 3, Paint()..color = const Color(0xFFFFC107).withOpacity(0.75));
+    }
+
     canvas.restore();
   }
 
@@ -1245,6 +1509,41 @@ class _CenterOverlay extends StatelessWidget {
             Text(title, style: const TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.w900)),
             Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.bold)),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CountdownOverlay extends StatelessWidget {
+  final int count;
+
+  const _CountdownOverlay({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0x66000000),
+      child: Center(
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 260),
+          scale: 1.0,
+          child: Container(
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.14),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white54, width: 2),
+            ),
+            child: Text(
+              '$count',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 64,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
         ),
       ),
     );
