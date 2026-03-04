@@ -29,6 +29,16 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
+        applicationVariants.all {
+        outputs.all {
+            val appName = "LookersHubGame"
+            val versionName = versionName
+            val versionCode = versionCode
+
+            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl)
+                .outputFileName = "$appName-v$versionName($versionCode).apk"
+        }
+    }
 
     buildTypes {
         release {
