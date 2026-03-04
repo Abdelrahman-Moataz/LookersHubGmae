@@ -17,13 +17,174 @@ Future<void> main() async {
 
 enum ScreenType { splash, auth, mainMenu, levelMap, game, shop, profile }
 
-enum LevelRank { easy, hard }
+// ─── Difficulty rank ───────────────────────────────────────────────────────
+enum LevelRank { easy, medium, hard, boss }
 
-LevelRank getLevelRank(int levelId) => levelId <= 15 ? LevelRank.easy : LevelRank.hard;
+bool isHardLevel(LevelRank rank) => rank == LevelRank.boss;
+
+String rankLabel(LevelRank rank) {
+  switch (rank) {
+    case LevelRank.easy:   return 'EASY';
+    case LevelRank.medium: return 'MEDIUM';
+    case LevelRank.hard:   return 'HARD';
+    case LevelRank.boss:   return 'BOSS';
+  }
+}
+
+Color rankColor(LevelRank rank) {
+  switch (rank) {
+    case LevelRank.easy:   return const Color(0xFF22C55E);
+    case LevelRank.medium: return const Color(0xFFF59E0B);
+    case LevelRank.hard:   return const Color(0xFFEF4444);
+    case LevelRank.boss:   return const Color(0xFF7C3AED);
+  }
+}
+
+// ─── Chapter definition ────────────────────────────────────────────────────
+class ChapterDef {
+  final int number;
+  final String name;
+  final String emoji;
+  final Color color;
+  final Color bgColor;
+  final Color pipeColor;
+  final List<LevelRank> levelRanks;
+
+  const ChapterDef({
+    required this.number,
+    required this.name,
+    required this.emoji,
+    required this.color,
+    required this.bgColor,
+    required this.pipeColor,
+    required this.levelRanks,
+  });
+}
+
+// ─── 5 hand-crafted chapters, 6 levels each = 30 total ────────────────────
+// Difficulties are intentionally mixed — not a ramp — so players feel
+// rhythm changes. Every chapter's final level is always BOSS (fire level).
+const List<ChapterDef> chapters = [
+  ChapterDef(
+    number: 1,
+    name: 'Sunny Skies',
+    emoji: '☀️',
+    color: Color(0xFF0EA5E9),
+    bgColor: Color(0xFF38BDF8),
+    pipeColor: Color(0xFF166534),
+    // Gentle intro → surprise spike → breather → challenge → medium → BOSS
+    levelRanks: [
+      LevelRank.easy,
+      LevelRank.medium,
+      LevelRank.easy,
+      LevelRank.hard,
+      LevelRank.medium,
+      LevelRank.boss,
+    ],
+  ),
+  ChapterDef(
+    number: 2,
+    name: 'Emerald Jungle',
+    emoji: '🌿',
+    color: Color(0xFF10B981),
+    bgColor: Color(0xFF059669),
+    pipeColor: Color(0xFF14532D),
+    // Confident start → breather → hard → medium comeback → hard → BOSS
+    levelRanks: [
+      LevelRank.medium,
+      LevelRank.easy,
+      LevelRank.hard,
+      LevelRank.medium,
+      LevelRank.hard,
+      LevelRank.boss,
+    ],
+  ),
+  ChapterDef(
+    number: 3,
+    name: 'Desert Storm',
+    emoji: '🏜️',
+    color: Color(0xFFF59E0B),
+    bgColor: Color(0xFFD97706),
+    pipeColor: Color(0xFF9A3412),
+    // Tough opener → medium → hard grind → breather → hard → BOSS
+    levelRanks: [
+      LevelRank.hard,
+      LevelRank.medium,
+      LevelRank.hard,
+      LevelRank.easy,
+      LevelRank.hard,
+      LevelRank.boss,
+    ],
+  ),
+  ChapterDef(
+    number: 4,
+    name: 'Mystic Caves',
+    emoji: '🔮',
+    color: Color(0xFF8B5CF6),
+    bgColor: Color(0xFF6D28D9),
+    pipeColor: Color(0xFF1E3A8A),
+    // Medium → back-to-back hard → surprise easy → hard → BOSS
+    levelRanks: [
+      LevelRank.medium,
+      LevelRank.hard,
+      LevelRank.hard,
+      LevelRank.easy,
+      LevelRank.hard,
+      LevelRank.boss,
+    ],
+  ),
+  ChapterDef(
+    number: 5,
+    name: 'Inferno Peak',
+    emoji: '🌋',
+    color: Color(0xFFEF4444),
+    bgColor: Color(0xFFB91C1C),
+    pipeColor: Color(0xFF7C2D12),
+    // No mercy — hard straight through with one medium breathe → BOSS
+    levelRanks: [
+      LevelRank.hard,
+      LevelRank.hard,
+      LevelRank.medium,
+      LevelRank.hard,
+      LevelRank.hard,
+      LevelRank.boss,
+    ],
+  ),
+];
+
+// ─── Lookup helpers ────────────────────────────────────────────────────────
+ChapterDef getChapter(int levelId) {
+  int rem = levelId;
+  for (final ch in chapters) {
+    if (rem <= ch.levelRanks.length) return ch;
+    rem -= ch.levelRanks.length;
+  }
+  return chapters.last;
+}
+
+LevelRank getLevelRank(int levelId) {
+  int rem = levelId;
+  for (final ch in chapters) {
+    if (rem <= ch.levelRanks.length) return ch.levelRanks[rem - 1];
+    rem -= ch.levelRanks.length;
+  }
+  return LevelRank.boss;
+}
+
+/// 1-based position of a level within its chapter.
+int levelIndexInChapter(int levelId) {
+  int rem = levelId;
+  for (final ch in chapters) {
+    if (rem <= ch.levelRanks.length) return rem;
+    rem -= ch.levelRanks.length;
+  }
+  return 1;
+}
 
 int getDragonTier(int levelId) {
-  if (levelId <= 10) return 1;
-  if (levelId <= 20) return 2;
+  final ch = getChapter(levelId);
+  if (ch.number <= 2) return 1;
+  if (ch.number <= 4) return 2;
   return 3;
 }
 
@@ -175,45 +336,66 @@ const characters = [
 ];
 
 List<LevelConfig> generateLevels() {
-  const bgColors = [
-    Color(0xFF0EA5E9),
-    Color(0xFF38BDF8),
-    Color(0xFF0284C7),
-    Color(0xFFF59E0B),
-    Color(0xFFFBBF24),
-    Color(0xFFD97706),
-    Color(0xFF10B981),
-    Color(0xFF34D399),
-    Color(0xFF059669),
-    Color(0xFF8B5CF6),
-    Color(0xFFA78BFA),
-    Color(0xFF7C3AED),
-  ];
+  final List<LevelConfig> result = [];
+  int globalId = 1;
 
-  const pipeColors = [
-    Color(0xFF166534),
-    Color(0xFF15803D),
-    Color(0xFF14532D),
-    Color(0xFF9A3412),
-    Color(0xFFC2410C),
-    Color(0xFF7C2D12),
-    Color(0xFF1E3A8A),
-    Color(0xFF1E40AF),
-    Color(0xFF172554),
-  ];
+  for (final ch in chapters) {
+    // Each later chapter is harder overall via a chapter multiplier
+    final chMult = 1.0 + (ch.number - 1) * 0.14;
 
-  return List.generate(totalLevels, (index) {
-    final levelNum = index + 1;
-    return LevelConfig(
-      id: levelNum,
-      bgColor: bgColors[index % bgColors.length],
-      pipeColor: pipeColors[index % pipeColors.length],
-      speed: 3 + (levelNum * 0.15),
-      gapSize: max(160, 260 - (levelNum * 3.5)).toDouble(),
-      pipesToPass: 5 + (levelNum ~/ 2),
-      eggProbability: 0.3 + (levelNum * 0.01),
-    );
-  });
+    for (int i = 0; i < ch.levelRanks.length; i++) {
+      final rank = ch.levelRanks[i];
+
+      final double speed;
+      final double gapSize;
+      final int pipesToPass;
+      final double eggProbability;
+
+      switch (rank) {
+        case LevelRank.easy:
+          speed          = 3.2 * chMult;
+          gapSize        = 230 - (ch.number - 1) * 10.0;
+          pipesToPass    = 5 + (ch.number - 1);
+          eggProbability = 0.55;
+          break;
+        case LevelRank.medium:
+          speed          = 4.2 * chMult;
+          gapSize        = 205 - (ch.number - 1) * 9.0;
+          pipesToPass    = 7 + (ch.number - 1);
+          eggProbability = 0.42;
+          break;
+        case LevelRank.hard:
+          speed          = 5.4 * chMult;
+          gapSize        = 182 - (ch.number - 1) * 8.0;
+          pipesToPass    = 10 + (ch.number - 1);
+          eggProbability = 0.30;
+          break;
+        case LevelRank.boss:
+          speed          = 6.8 * chMult;
+          gapSize        = max(145, 162.0 - (ch.number - 1) * 7.0);
+          pipesToPass    = 14 + (ch.number - 1) * 2;
+          eggProbability = 0.20;
+          break;
+      }
+
+      // Boss levels get the chapter's pipe colour; others get a lighter tint
+      final pipeColor = rank == LevelRank.boss
+          ? ch.pipeColor
+          : Color.lerp(ch.pipeColor, Colors.white, 0.18)!;
+
+      result.add(LevelConfig(
+        id: globalId,
+        bgColor: ch.bgColor,
+        pipeColor: pipeColor,
+        speed: speed.clamp(3.0, 14.0),
+        gapSize: gapSize.clamp(140.0, 250.0),
+        pipesToPass: pipesToPass,
+        eggProbability: eggProbability,
+      ));
+      globalId++;
+    }
+  }
+  return result;
 }
 
 Color _hexToColor(String hex) {
@@ -379,7 +561,7 @@ class _EggQuestHomeState extends State<EggQuestHome> {
           });
           _setDebugStatus('Profile synced. Navigated to level map.');
           _setDebugStatus('Level complete. Back to map.');
-      unawaited(_fetchAiTip());
+          unawaited(_fetchAiTip());
         } catch (e) {
           if (!mounted) return;
           _setDebugStatus('Firestore sync failed: $e');
@@ -583,13 +765,11 @@ class _EggQuestHomeState extends State<EggQuestHome> {
                     ],
                   )
                 else
-                  Column(
+                  const Column(
                     children: [
                       CircularProgressIndicator(color: Colors.white),
                       SizedBox(height: 10),
                       Text('Connecting to Cloud', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
-                      SizedBox(height: 8),
-                      Text(debugStatus, style: TextStyle(color: Colors.white70, fontSize: 11), textAlign: TextAlign.center),
                     ],
                   ),
               ],
@@ -852,68 +1032,7 @@ class _EggQuestHomeState extends State<EggQuestHome> {
                 ),
               ),
             Expanded(
-              child: ListView.builder(
-                reverse: true,
-                padding: const EdgeInsets.only(top: 12, bottom: 100),
-                itemCount: levels.length,
-                itemBuilder: (context, index) {
-                  final level = levels[index];
-                  final isUnlocked = level.id <= currentUser.unlockedLevels;
-                  final isCurrent = level.id == currentUser.unlockedLevels;
-                  final isHard = getLevelRank(level.id) == LevelRank.hard;
-                  final offset = sin(index * 0.8) * 60;
-
-                  return Align(
-                    alignment: Alignment.center,
-                    child: Transform.translate(
-                      offset: Offset(offset, 0),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        child: SizedBox(
-                          width: 88,
-                          height: 88,
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              Positioned.fill(
-                                child: ElevatedButton(
-                                  onPressed: !isUnlocked
-                                      ? null
-                                      : () {
-                                          _updateUserData({'currentLevel': level.id});
-                                          setState(() => screen = ScreenType.game);
-                                        },
-                                  style: ElevatedButton.styleFrom(
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                                    backgroundColor: isCurrent
-                                        ? const Color(0xFF0EA5E9)
-                                        : isUnlocked
-                                            ? (isHard ? const Color(0xFFB45309) : const Color(0xFF10B981))
-                                            : Colors.grey,
-                                  ),
-                                  child: Text(isUnlocked ? '${level.id}' : '🔒', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
-                                ),
-                              ),
-                              if (isHard && isUnlocked)
-                                const Positioned.fill(child: IgnorePointer(child: _HardLevelFireAura())),
-                              if (isHard)
-                                Positioned(
-                                  top: -8,
-                                  right: -8,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(color: const Color(0xFFFFEDD5), borderRadius: BorderRadius.circular(999)),
-                                    child: const Text('HARD', style: TextStyle(fontSize: 10, color: Color(0xFF9A3412), fontWeight: FontWeight.w900)),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
+              child: _buildLevelMap(currentUser),
             ),
             Container(
               color: Colors.white,
@@ -932,7 +1051,231 @@ class _EggQuestHomeState extends State<EggQuestHome> {
       ),
     );
   }
+
+  // ── Chapter-grouped level map ─────────────────────────────────────────────
+  Widget _buildLevelMap(UserData currentUser) {
+    // Build a flat list of items: chapter header + level buttons
+    // We display it reversed (bottom = level 1) like a tower map
+    final List<Widget> items = [];
+
+    int globalIndex = 0; // for the sin-wave offset
+
+    for (final ch in chapters) {
+      final chapterStartId = _chapterStartId(ch);
+      final chapterEndId = chapterStartId + ch.levelRanks.length - 1;
+      final chapterUnlocked = currentUser.unlockedLevels >= chapterStartId;
+
+      // Chapter banner
+      items.add(_ChapterBanner(chapter: ch, unlocked: chapterUnlocked));
+
+      // Level buttons for this chapter
+      for (int i = 0; i < ch.levelRanks.length; i++) {
+        final levelId = chapterStartId + i;
+        final level = levels.firstWhere((l) => l.id == levelId);
+        final isUnlocked = levelId <= currentUser.unlockedLevels;
+        final isCurrent = levelId == currentUser.unlockedLevels;
+        final rank = ch.levelRanks[i];
+        final isBoss = rank == LevelRank.boss;
+        final offset = sin(globalIndex * 0.8) * 55;
+        globalIndex++;
+
+        Color btnColor;
+        if (!isUnlocked) {
+          btnColor = Colors.grey.shade400;
+        } else if (isCurrent) {
+          btnColor = ch.color;
+        } else if (isBoss) {
+          btnColor = const Color(0xFF7C3AED);
+        } else {
+          btnColor = rankColor(rank);
+        }
+
+        items.add(
+          Align(
+            alignment: Alignment.center,
+            child: Transform.translate(
+              offset: Offset(offset, 0),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 9),
+                child: SizedBox(
+                  width: 88,
+                  height: 88,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned.fill(
+                        child: ElevatedButton(
+                          onPressed: !isUnlocked
+                              ? null
+                              : () {
+                                  _updateUserData({'currentLevel': level.id});
+                                  setState(() => screen = ScreenType.game);
+                                },
+                          style: ElevatedButton.styleFrom(
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                            backgroundColor: btnColor,
+                            elevation: isCurrent ? 8 : 3,
+                            shadowColor: isCurrent ? ch.color.withOpacity(0.6) : null,
+                          ),
+                          child: Text(
+                            isUnlocked ? '$levelId' : '🔒',
+                            style: TextStyle(
+                              fontSize: isCurrent ? 28 : 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Fire aura on boss levels
+                      if (isBoss && isUnlocked)
+                        const Positioned.fill(child: IgnorePointer(child: _HardLevelFireAura())),
+                      // Rank badge
+                      if (isUnlocked)
+                        Positioned(
+                          top: -8,
+                          right: -8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: isBoss ? const Color(0xFF7C3AED) : rankColor(rank),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(color: Colors.white, width: 1.5),
+                            ),
+                            child: Text(
+                              rankLabel(rank),
+                              style: const TextStyle(
+                                fontSize: 8,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ),
+                      // "YOU ARE HERE" pulse on current level
+                      if (isCurrent)
+                        Positioned(
+                          bottom: -14,
+                          left: 0,
+                          right: 0,
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: ch.color,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: const Text('▶ HERE', style: TextStyle(fontSize: 7, color: Colors.white, fontWeight: FontWeight.w900)),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+    }
+
+    // Reverse so level 1 is at the bottom of the scroll list
+    final reversed = items.reversed.toList();
+
+    return ListView.builder(
+      reverse: false,
+      padding: const EdgeInsets.only(top: 12, bottom: 110),
+      itemCount: reversed.length,
+      itemBuilder: (_, i) => reversed[i],
+    );
+  }
+
+  int _chapterStartId(ChapterDef ch) {
+    int id = 1;
+    for (final c in chapters) {
+      if (c.number == ch.number) return id;
+      id += c.levelRanks.length;
+    }
+    return id;
+  }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Chapter banner — shown between chapter groups on the level map
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ChapterBanner extends StatelessWidget {
+  final ChapterDef chapter;
+  final bool unlocked;
+
+  const _ChapterBanner({required this.chapter, required this.unlocked});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        decoration: BoxDecoration(
+          color: unlocked ? chapter.color.withOpacity(0.15) : Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: unlocked ? chapter.color.withOpacity(0.5) : Colors.grey.shade300,
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            Text(chapter.emoji, style: const TextStyle(fontSize: 28)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Chapter ${chapter.number}',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: unlocked ? chapter.color : Colors.grey,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  Text(
+                    chapter.name,
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                      color: unlocked ? Colors.black87 : Colors.grey,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (!unlocked)
+              const Icon(Icons.lock, color: Colors.grey, size: 20)
+            else
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: chapter.color,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '${chapter.levelRanks.length} levels',
+                  style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w700),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hard-level fire aura widget on the level map button
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _HardLevelFireAura extends StatefulWidget {
   const _HardLevelFireAura();
@@ -982,6 +1325,10 @@ class _HardLevelFireAuraState extends State<_HardLevelFireAura> with SingleTicke
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Nav tab
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _NavTab extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -1005,6 +1352,10 @@ class _NavTab extends StatelessWidget {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Game view
+// ─────────────────────────────────────────────────────────────────────────────
 
 class EggGameView extends StatefulWidget {
   final LevelConfig level;
@@ -1161,11 +1512,7 @@ class _EggGameViewState extends State<EggGameView> {
       _startCountdown();
       return;
     }
-
-    if (gameState == 'COUNTDOWN') {
-      return;
-    }
-
+    if (gameState == 'COUNTDOWN') return;
     if (gameState == 'PLAYING') {
       birdVelocity.value = jumpForce;
     }
@@ -1320,7 +1667,7 @@ class _EggGameViewState extends State<EggGameView> {
           if (gameState == 'IDLE')
             _CenterOverlay(
               title: 'Level ${widget.level.id}',
-              subtitle: 'Dragon Rank ${getDragonTier(widget.level.id)} • Pass ${widget.level.pipesToPass} pipes • Hard levels breathe fire!',
+              subtitle: '${rankLabel(getLevelRank(widget.level.id))} • Pass ${widget.level.pipesToPass} pipes',
               icon: Icons.rocket_launch,
               tint: Colors.black45,
             ),
@@ -1359,6 +1706,10 @@ class _EggGameViewState extends State<EggGameView> {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Game Painter — handles all canvas drawing
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _GamePainter extends CustomPainter {
   final List<_Star> stars;
   final List<PipeData> pipes;
@@ -1386,38 +1737,81 @@ class _GamePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    final isHard = isHardLevel(levelRank);
+
+    // ── Stars ──────────────────────────────────────────────────────────────
     final starPaint = Paint()..color = Colors.white54;
     for (final s in stars) {
       canvas.drawCircle(Offset(s.x, s.y), s.size, starPaint);
     }
 
+    // ── Pipes ──────────────────────────────────────────────────────────────
     final pipePaint = Paint()..color = pipeColor;
     for (final pipe in pipes) {
+      // Top pipe body
       canvas.drawRRect(
         RRect.fromRectAndRadius(Rect.fromLTWH(pipe.x, 0, 70, pipe.topHeight), const Radius.circular(8)),
         pipePaint,
       );
+      // Bottom pipe body
       canvas.drawRRect(
         RRect.fromRectAndRadius(Rect.fromLTWH(pipe.x, pipe.topHeight + gapSize, 70, 1000), const Radius.circular(8)),
         pipePaint,
       );
+
+      // ── Pipe fire jets (hard levels only) ────────────────────────────────
+      if (isHard) {
+        _drawPipeFire(canvas, pipe);
+      }
+
+      // ── Egg ───────────────────────────────────────────────────────────────
       if (pipe.hasEgg && !pipe.eggCollected) {
         final eggPaint = Paint()..color = const Color(0xFFFACC15);
-        canvas.drawOval(Rect.fromCenter(center: Offset(pipe.x + 35, pipe.eggY), width: 16, height: 20), eggPaint);
+        canvas.drawOval(
+          Rect.fromCenter(center: Offset(pipe.x + 35, pipe.eggY), width: 16, height: 20),
+          eggPaint,
+        );
       }
     }
 
+    // ── Bird ───────────────────────────────────────────────────────────────
     canvas.save();
     canvas.translate(118, birdY + 18);
     canvas.rotate((birdVelocity * 0.04).clamp(-0.35, 0.45));
 
     final bodyPaint = Paint()..color = birdColor;
     final wingPaint = Paint()..color = Color.lerp(birdColor, Colors.black, 0.25)!;
-    final accentPaint = Paint()..color = dragonTier >= 3 ? const Color(0xFFDC2626) : const Color(0xFFF97316);
+    final accentPaint = Paint()
+      ..color = dragonTier >= 3 ? const Color(0xFFDC2626) : const Color(0xFFF97316);
 
     final bodyRadius = dragonTier == 1 ? 16.0 : dragonTier == 2 ? 18.0 : 20.0;
+
+    // Hard-level bird: glowing fire aura drawn BEHIND the body
+    if (isHard) {
+      final auraRadius = bodyRadius + 6 + (sin(effectClock * 3) * 3);
+
+      // Outer soft glow
+      canvas.drawCircle(
+        Offset.zero,
+        auraRadius + 6,
+        Paint()
+          ..color = const Color(0xFFFF6A00).withOpacity(0.20)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12),
+      );
+      // Inner flame ring
+      canvas.drawCircle(
+        Offset.zero,
+        auraRadius,
+        Paint()
+          ..color = const Color(0xFFFF6A00).withOpacity(0.50)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+      );
+    }
+
+    // Bird body
     canvas.drawCircle(Offset.zero, bodyRadius, bodyPaint);
 
+    // Wings
     final wingFlap = sin(effectClock * 2.3) * 4;
     final leftWing = Path()
       ..moveTo(-2, -2)
@@ -1432,6 +1826,7 @@ class _GamePainter extends CustomPainter {
     canvas.drawPath(leftWing, wingPaint);
     canvas.drawPath(rightWing, wingPaint);
 
+    // Horn
     final horn = Path()
       ..moveTo(4, -12)
       ..lineTo(9, -24)
@@ -1439,9 +1834,11 @@ class _GamePainter extends CustomPainter {
       ..close();
     canvas.drawPath(horn, accentPaint);
 
+    // Eye
     canvas.drawCircle(const Offset(7, -5), 3.2, Paint()..color = Colors.white);
     canvas.drawCircle(const Offset(8, -5), 1.5, Paint()..color = Colors.black);
 
+    // Snout / mouth
     final mouth = Path()
       ..moveTo(12, 1)
       ..lineTo(26, 4)
@@ -1449,23 +1846,143 @@ class _GamePainter extends CustomPainter {
       ..close();
     canvas.drawPath(mouth, accentPaint);
 
-    if (levelRank == LevelRank.hard) {
-      final fireLen = 16 + (sin(effectClock * 4.5).abs() * 12);
-      final fire = Path()
-        ..moveTo(24, 4)
-        ..lineTo(24 + fireLen, -1)
-        ..lineTo(24 + fireLen, 9)
-        ..close();
-      canvas.drawPath(fire, Paint()..color = const Color(0xFFFF6A00).withOpacity(0.8));
-      canvas.drawCircle(Offset(24 + fireLen + 4, 4), 3, Paint()..color = const Color(0xFFFFC107).withOpacity(0.75));
+    // Hard-level bird: animated fire breath from the mouth
+    if (isHard) {
+      _drawBirdFire(canvas);
     }
 
     canvas.restore();
   }
 
+  /// Draws animated curved fire breath shooting from the bird's snout.
+  void _drawBirdFire(Canvas canvas) {
+    final fireLen = 18 + (sin(effectClock * 4.5).abs() * 16);
+    final flickerY = sin(effectClock * 7) * 2.5;
+
+    // Outer flame — orange
+    final outerFire = Path()
+      ..moveTo(22, 4 + flickerY)
+      ..quadraticBezierTo(30 + fireLen * 0.5, -5 + flickerY, 24 + fireLen, flickerY)
+      ..quadraticBezierTo(30 + fireLen * 0.5, 13 + flickerY, 22, 4 + flickerY);
+    canvas.drawPath(
+      outerFire,
+      Paint()
+        ..color = const Color(0xFFFF6A00).withOpacity(0.88)
+        ..style = PaintingStyle.fill,
+    );
+
+    // Inner flame — yellow core
+    final innerFire = Path()
+      ..moveTo(23, 4 + flickerY)
+      ..quadraticBezierTo(29 + fireLen * 0.4, 0 + flickerY, 22 + fireLen * 0.72, flickerY + 1)
+      ..quadraticBezierTo(29 + fireLen * 0.4, 8 + flickerY, 23, 4 + flickerY);
+    canvas.drawPath(
+      innerFire,
+      Paint()
+        ..color = const Color(0xFFFFC107).withOpacity(0.92)
+        ..style = PaintingStyle.fill,
+    );
+
+    // Hot white tip glow
+    canvas.drawCircle(
+      Offset(24 + fireLen, 1 + flickerY),
+      4.5,
+      Paint()
+        ..color = Colors.white.withOpacity(0.75)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+    );
+  }
+
+  /// Draws animated fire jets erupting from both the top and bottom pipe openings.
+  void _drawPipeFire(Canvas canvas, PipeData pipe) {
+    final pipeCenter = pipe.x + 35;
+    final gapTop = pipe.topHeight;
+    final gapBottom = pipe.topHeight + gapSize;
+
+    // ── Jets from the bottom edge of the top pipe (pointing down into gap) ──
+    for (var i = 0; i < 3; i++) {
+      final xOff = (i - 1) * 16.0;
+      final flicker = sin(effectClock * 5 + i * 1.4) * 6 + 20;
+      final xPos = pipeCenter + xOff;
+
+      // Outer orange flame
+      final topJetOuter = Path()
+        ..moveTo(xPos - 8, gapTop)
+        ..quadraticBezierTo(xPos, gapTop + flicker + 10, xPos + 8, gapTop)
+        ..close();
+      canvas.drawPath(
+        topJetOuter,
+        Paint()
+          ..color = const Color(0xFFFF6A00).withOpacity(0.78)
+          ..style = PaintingStyle.fill,
+      );
+
+      // Inner yellow core
+      final topJetInner = Path()
+        ..moveTo(xPos - 4, gapTop)
+        ..quadraticBezierTo(xPos, gapTop + flicker * 0.58, xPos + 4, gapTop)
+        ..close();
+      canvas.drawPath(
+        topJetInner,
+        Paint()
+          ..color = const Color(0xFFFFC107).withOpacity(0.88)
+          ..style = PaintingStyle.fill,
+      );
+    }
+
+    // ── Jets from the top edge of the bottom pipe (pointing up into gap) ──
+    for (var i = 0; i < 3; i++) {
+      final xOff = (i - 1) * 16.0;
+      final flicker = sin(effectClock * 5 + i * 1.8 + 2.1) * 6 + 20;
+      final xPos = pipeCenter + xOff;
+
+      // Outer orange flame
+      final bottomJetOuter = Path()
+        ..moveTo(xPos - 8, gapBottom)
+        ..quadraticBezierTo(xPos, gapBottom - flicker - 10, xPos + 8, gapBottom)
+        ..close();
+      canvas.drawPath(
+        bottomJetOuter,
+        Paint()
+          ..color = const Color(0xFFFF6A00).withOpacity(0.78)
+          ..style = PaintingStyle.fill,
+      );
+
+      // Inner yellow core
+      final bottomJetInner = Path()
+        ..moveTo(xPos - 4, gapBottom)
+        ..quadraticBezierTo(xPos, gapBottom - flicker * 0.58, xPos + 4, gapBottom)
+        ..close();
+      canvas.drawPath(
+        bottomJetInner,
+        Paint()
+          ..color = const Color(0xFFFFC107).withOpacity(0.88)
+          ..style = PaintingStyle.fill,
+      );
+    }
+
+    // ── Glowing edges at both pipe openings ──────────────────────────────
+    canvas.drawRect(
+      Rect.fromLTWH(pipe.x, gapTop - 3, 70, 6),
+      Paint()
+        ..color = const Color(0xFFFF6A00).withOpacity(0.45)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7),
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(pipe.x, gapBottom - 3, 70, 6),
+      Paint()
+        ..color = const Color(0xFFFF6A00).withOpacity(0.45)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7),
+    );
+  }
+
   @override
   bool shouldRepaint(covariant _GamePainter oldDelegate) => true;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HUD, overlays, and supporting widgets
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _HudBox extends StatelessWidget {
   final String title;
@@ -1537,11 +2054,7 @@ class _CountdownOverlay extends StatelessWidget {
             ),
             child: Text(
               '$count',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 64,
-                fontWeight: FontWeight.w900,
-              ),
+              style: const TextStyle(color: Colors.white, fontSize: 64, fontWeight: FontWeight.w900),
             ),
           ),
         ),
@@ -1609,6 +2122,10 @@ class _WinOverlay extends StatelessWidget {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Star data
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _Star {
   double x;

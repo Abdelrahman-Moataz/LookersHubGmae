@@ -9,50 +9,25 @@
 .history
 .svn/
 
-# IntelliJ
-.idea/
+# IntelliJ related
 *.iml
 *.ipr
 *.iws
-out/
+.idea/
 
-# The Flutter SDK
-.flutter-plugins
-.flutter-plugins-dependencies
+# Flutter/Dart/Pub related
+**/doc/api/
+.dart_tool/
 .packages
 .pub-cache/
 .pub/
 /build/
+**/ios/.symlinks/
+**/ios/Flutter/App.framework
+**/ios/Flutter/Flutter.framework
 
-# Android Studio
-.gradle/
-app/src/main/gen/
-captures/
-local.properties
-
-# Xcode
-.xcworkspace/
-build/
-*.hmap
-*.xccheckout
-/ios/Flutter/App.framework
-/ios/Flutter/Flutter.framework
-/ios/Flutter/Generated.xcconfig
-/ios/Flutter/flutter_export_environment.sh
-/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-1024.png
-/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-167.png
-/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-20.png
-/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-29.png
-/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-40.png
-/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-58.png
-/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-60.png
-/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-76.png
-/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-80.png
-/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-87.png
-/ios/Runner/GeneratedPluginRegistrant.*
-
-# Visual Studio Code
-.vscode/
-
-# Don't ignore the release APK
-!/build/app/outputs/flutter-apk/app-release.apk
+# Android related
+**/android/**/gradle-wrapper.jar
+**/android/.gradle
+**/android/captures/
+**/android/local.properties
