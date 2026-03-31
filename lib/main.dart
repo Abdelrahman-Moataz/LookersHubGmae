@@ -362,7 +362,7 @@ class PipeData {
 
   // Boss-level vertical oscillation
   final double baseTopHeight; // original spawn height
-  final double oscillationAmp;  // pixels to move up/down
+  double oscillationAmp;  // pixels to move up/down
   final double oscillationSpeed; // radians per tick
   double oscillationPhase;       // current phase offset (unique per pipe)
 
@@ -587,7 +587,7 @@ class EggQuestApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: appThemeMode,
-      builder: (_, mode, _) => MaterialApp(
+      builder: (_, mode, __) => MaterialApp(
         title: 'Egg Quest',
         debugShowCheckedModeBanner: false,
         themeMode: mode,
@@ -675,7 +675,7 @@ class _SplashScreenState extends State<_SplashScreen>
 
     return AnimatedBuilder(
       animation: _ctrl,
-      builder: (_, _) {
+      builder: (_, __) {
         final alpha = (_fadeIn.value * _fadeOut.value).clamp(0.0, 1.0);
         return Scaffold(
           backgroundColor: bgColor,
@@ -2019,6 +2019,7 @@ class _EggGameViewState extends State<EggGameView> {
   final birdVelocity = ValueNotifier<double>(0);
 
   final List<PipeData> pipes = [];
+  int _bossPipeIndex = 0; // only this index pipe oscillates in boss level
   final List<_Star> stars = [];
 
   static const gravity = 0.55;
@@ -2056,6 +2057,7 @@ class _EggGameViewState extends State<EggGameView> {
   // Win fly-out animation
   bool winFlyOut = false;
   double winBirdX = 118;
+  double boostBirdX = 0.0; // extra forward offset during boost lunge
 
   @override
   void initState() {
@@ -2089,6 +2091,8 @@ class _EggGameViewState extends State<EggGameView> {
     showCrashFlash = false;
     winFlyOut = false;
     winBirdX = 118;
+    boostBirdX = 0.0;
+    _bossPipeIndex = 0;
     _boostTimer?.cancel();
     feathers.clear();
     pipes.clear();
@@ -2110,6 +2114,9 @@ class _EggGameViewState extends State<EggGameView> {
     final topHeight = random.nextDouble() * (maxHeight - minHeight) + minHeight;
     // Each pipe gets a unique phase so they don't all move in sync
     final phase = random.nextDouble() * 6.28;
+    // In boss levels, only the currently tracked pipe oscillates
+    final isOscillating = widget.level.isBossLevel &&
+        pipes.length == _bossPipeIndex;
     return PipeData(
       x: x,
       topHeight: topHeight,
@@ -2117,7 +2124,7 @@ class _EggGameViewState extends State<EggGameView> {
       hasEgg: random.nextDouble() < widget.level.eggProbability,
       eggY: topHeight + (widget.level.gapSize / 2),
       eggCollected: false,
-      oscillationAmp: widget.level.pipeOscAmp,
+      oscillationAmp: isOscillating ? widget.level.pipeOscAmp : 0,
       oscillationSpeed: widget.level.pipeOscSpeed,
       oscillationPhase: phase,
     );
@@ -2225,15 +2232,27 @@ class _EggGameViewState extends State<EggGameView> {
     if (isBoosted) return;
     if (gameState != 'PLAYING') return;
     _boostTimer?.cancel();
-    // Give the bird a strong upward push
-    birdVelocity.value = jumpForce * 1.6;
     HapticFeedback.mediumImpact();
     setState(() {
       eggsDisplay -= boostEggCost;
       isBoosted = true;
+      boostBirdX = 0.0;
     });
+    // Animate the bird lunging forward over boostDuration then snapping back
+    const steps = 20;
+    const stepMs = 50; // 20 steps * 50ms = 1000ms total
+    const maxLunge = 80.0; // pixels forward at peak
+    for (int i = 0; i < steps; i++) {
+      Future.delayed(Duration(milliseconds: i * stepMs), () {
+        if (!mounted) return;
+        // Sine curve: ramp up then ramp down
+        final t = i / (steps - 1);
+        final lunge = maxLunge * sin(t * pi);
+        setState(() => boostBirdX = lunge);
+      });
+    }
     _boostTimer = Timer(boostDuration, () {
-      if (mounted) setState(() => isBoosted = false);
+      if (mounted) setState(() { isBoosted = false; boostBirdX = 0.0; });
     });
   }
 
@@ -2263,13 +2282,16 @@ class _EggGameViewState extends State<EggGameView> {
     for (final pipe in pipes) {
       pipe.x -= widget.level.speed * (isBoosted ? boostMultiplier : 1.0);
 
-      // Boss-level vertical oscillation ─────────────────────────────────────
-      if (widget.level.isBossLevel && pipe.oscillationAmp > 0) {
-        pipe.oscillationPhase += pipe.oscillationSpeed;
-        final dy = sin(pipe.oscillationPhase) * pipe.oscillationAmp;
-        pipe.topHeight = (pipe.baseTopHeight + dy)
-            .clamp(55.0, canvasHeight - widget.level.gapSize - 55.0);
-        pipe.eggY = pipe.topHeight + widget.level.gapSize / 2;
+      // Boss-level: only one pipe oscillates at a time ─────────────────────
+      if (widget.level.isBossLevel) {
+        final pIdx = pipes.indexOf(pipe);
+        if (pIdx == _bossPipeIndex && pipe.oscillationAmp > 0) {
+          pipe.oscillationPhase += pipe.oscillationSpeed;
+          final dy = sin(pipe.oscillationPhase) * pipe.oscillationAmp;
+          pipe.topHeight = (pipe.baseTopHeight + dy)
+              .clamp(55.0, canvasHeight - widget.level.gapSize - 55.0);
+          pipe.eggY = pipe.topHeight + widget.level.gapSize / 2;
+        }
       }
 
       final left = 104;
@@ -2313,6 +2335,15 @@ class _EggGameViewState extends State<EggGameView> {
 
       if (!pipe.passed && pipe.x + pipeWidth < 100) {
         pipe.passed = true;
+        // In boss level: move the oscillating pipe to the next one
+        if (widget.level.isBossLevel && pipes.indexOf(pipe) == _bossPipeIndex) {
+          pipe.oscillationAmp = 0; // stop this pipe
+          setState(() => _bossPipeIndex++);
+          // Give amp to next pipe if it exists
+          if (_bossPipeIndex < pipes.length) {
+            pipes[_bossPipeIndex].oscillationAmp = widget.level.pipeOscAmp;
+          }
+        }
         score += 1;
         final remaining = widget.level.pipesToPass - score;
         // Exciting milestone messages
@@ -2426,7 +2457,7 @@ class _EggGameViewState extends State<EggGameView> {
                     effectClock: effectClock,
                     isBoosted: isBoosted,
                     feathers: feathers,
-                    winBirdX: winBirdX,
+                    winBirdX: winBirdX + boostBirdX,
                   ),
                 ),
               ),
@@ -2536,16 +2567,22 @@ class _EggGameViewState extends State<EggGameView> {
                     color: isBoosted
                         ? const Color(0xFFFF6A00)
                         : eggsDisplay >= boostEggCost
-                            ? Colors.black.withOpacity(0.72)
-                            : Colors.black.withOpacity(0.35),
+                            ? const Color(0xFF1A3A00).withOpacity(0.90)
+                            : Colors.black.withOpacity(0.30),
                     borderRadius: BorderRadius.circular(30),
                     border: Border.all(
-                      color: isBoosted ? Colors.white : Colors.white38,
-                      width: isBoosted ? 2.0 : 1.0,
+                      color: isBoosted
+                          ? Colors.white
+                          : eggsDisplay >= boostEggCost
+                              ? const Color(0xFF76FF03)
+                              : Colors.white24,
+                      width: isBoosted ? 2.0 : eggsDisplay >= boostEggCost ? 1.8 : 1.0,
                     ),
                     boxShadow: isBoosted
                         ? [BoxShadow(color: const Color(0xFFFF6A00).withOpacity(0.6), blurRadius: 12, spreadRadius: 2)]
-                        : [],
+                        : eggsDisplay >= boostEggCost
+                            ? [BoxShadow(color: const Color(0xFF76FF03).withOpacity(0.45), blurRadius: 10, spreadRadius: 1)]
+                            : [],
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -2553,7 +2590,11 @@ class _EggGameViewState extends State<EggGameView> {
                       Text(
                         isBoosted ? '⚡ BOOSTED!' : '⚡ Boost',
                         style: TextStyle(
-                          color: isBoosted ? Colors.white : Colors.white70,
+                          color: isBoosted
+                              ? Colors.white
+                              : eggsDisplay >= boostEggCost
+                                  ? const Color(0xFFCCFF90)
+                                  : Colors.white30,
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
                         ),
@@ -3434,7 +3475,7 @@ class _ShopBirdPreviewState extends State<_ShopBirdPreview> with SingleTickerPro
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _ctrl,
-      builder: (_, _) => CustomPaint(
+      builder: (_, __) => CustomPaint(
         size: Size.infinite,
         painter: _ShopBirdCanvas(
           birdType: widget.character.birdType,
